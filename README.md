@@ -1,6 +1,9 @@
 # sshp
 `sshp` is a command-line program to simplify the management of SSH keys stored in the 1Password agent configuration file. It uses the Bubbletea Text User Interface framework to provide an interface to toggle the SSH keys within the configuration, allowing users to quikcly select or deselect keys for use.
 
+## Demo
+![sshp demo](https://github.com/c0untingNumbers/sshp/blob/main/sshp_demo.gif)
+
 ## Purpose
 When you have too many SSH keys in your 1Password, you may encounter a problem where you SSH into a server and you get a disconnection from the server due to `Too many authentication failures` error. `sshp` allows you to manage which keys are active or not easily.
 

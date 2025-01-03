@@ -7,23 +7,80 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 var (
 	path string
+	keys = keyMap{
+		Up: key.NewBinding(
+			key.WithKeys("up", "k"),
+			key.WithHelp("↑/k", "move up"),
+		),
+		Down: key.NewBinding(
+			key.WithKeys("down", "j"),
+			key.WithHelp("↓/j", "move down"),
+		),
+		Help: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("?", "toggle help"),
+		),
+		Quit: key.NewBinding(
+			key.WithKeys("q", "esc", "ctrl+c"),
+			key.WithHelp("q", "quit"),
+		),
+		Enter: key.NewBinding(
+			key.WithKeys("enter", " "),
+			key.WithHelp("enter/space", "toggle selection"),
+		),
+	}
 )
 
+// keyMap defines a set of keybindings. To work for help it must satisfy
+// key.Map. It could also very easily be a map[string]key.Binding.
+type keyMap struct {
+	Up    key.Binding
+	Down  key.Binding
+	Help  key.Binding
+	Quit  key.Binding
+	Enter key.Binding
+}
+
+// ShortHelp returns keybindings to be shown in the mini help view. It's part
+// of the key.Map interface.
+func (k keyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Help, k.Quit}
+}
+
+// FullHelp returns keybindings for the expanded help view. It's part of the
+// key.Map interface.
+func (k keyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down},   // first column
+		{k.Help, k.Quit}, // second column
+	}
+}
+
 type model struct {
-	choices  []string         // items on the to-do list
-	cursor   int              // which to-do list item our cursor is pointing at
-	selected map[int]struct{} // which to-do items are selected
+	choices    []string         // items on the to-do list
+	cursor     int              // which to-do list item our cursor is pointing at
+	selected   map[int]struct{} // which to-do items are selected
+	keys       keyMap
+	help       help.Model
+	inputStyle lipgloss.Style
+	quitting   bool
 }
 
 func initialModel() model {
 	return model{
-		choices:  []string{},
-		selected: make(map[int]struct{}),
+		choices:    []string{},
+		selected:   make(map[int]struct{}),
+		keys:       keys,
+		help:       help.New(),
+		inputStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("#FF75B7")),
 	}
 }
 
@@ -141,28 +198,43 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
+	case tea.WindowSizeMsg:
+		// If we set a width on the help menu it can gracefully truncate
+		// its view as needed.
+		m.help.Width = msg.Width
+
 	case string:
 		fmt.Println(msg) // Print error message if any
+
 	case []string:
 		m.choices = msg
+
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
+		switch {
+		case key.Matches(msg, m.keys.Quit):
+
+			// Update the SSH keys config file before quitting
 			m.UpdateSSHKeysConfig()
+
+			m.quitting = true
 			return m, tea.Quit
-		case "up", "k":
+
+		case key.Matches(msg, m.keys.Up):
 			if m.cursor > 0 {
 				m.cursor--
 			} else if m.cursor == 0 {
 				m.cursor = len(m.choices) - 1
 			}
-		case "down", "j":
+		case key.Matches(msg, m.keys.Down):
 			if m.cursor < len(m.choices)-1 {
 				m.cursor++
 			} else if m.cursor == len(m.choices)-1 {
 				m.cursor = 0
 			}
-		case "enter", " ":
+		case key.Matches(msg, m.keys.Help):
+			m.help.ShowAll = !m.help.ShowAll
+		case key.Matches(msg, m.keys.Enter):
 			_, ok := m.selected[m.cursor]
 			if ok {
 				delete(m.selected, m.cursor)
@@ -175,7 +247,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	s := "What should we buy at the market?\n\n"
+	if m.quitting {
+		return "Bye!\n"
+	}
+
+	s := "Toggle which SSH keys you would like\n\n"
 	for i, choice := range m.choices {
 		cursor := " "
 		if m.cursor == i {
@@ -187,8 +263,14 @@ func (m model) View() string {
 		}
 		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
 	}
-	s += "\nPress q to quit.\n"
-	return s
+
+	helpView := m.help.View(m.keys)
+	height := len(m.choices) - strings.Count(s, "\n") - strings.Count(helpView, "\n")
+	if height < 1 {
+		height = 1
+	}
+
+	return s + strings.Repeat("\n", height) + helpView
 }
 
 func main() {
@@ -197,6 +279,7 @@ func main() {
 	} else if runtime.GOOS == "linux" {
 		path = fmt.Sprintf("/home/%s/.config/1Password/ssh/agent.toml", os.Getenv("USER"))
 	}
+
 	p := tea.NewProgram(initialModel())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)

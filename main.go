@@ -277,7 +277,7 @@ func (m model) View() string {
 func main() {
 
 	if runtime.GOOS == "windows" {
-		path = fmt.Sprintf("C:\\Users\\%s\\AppData\\Local\\1Password\\config\\ssh\\agent.toml", os.Getenv("USER"))
+		path = fmt.Sprintf("C:\\Users\\%s\\AppData\\Local\\1Password\\config\\ssh\\agent.toml", os.Getenv("USERNAME"))
 		cmd := exec.Command("cls")
 		cmd.Stdout = os.Stdout
 		cmd.Run()

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 
@@ -274,10 +275,18 @@ func (m model) View() string {
 }
 
 func main() {
+
 	if runtime.GOOS == "windows" {
 		path = fmt.Sprintf("C:\\Users\\%s\\AppData\\Local\\1Password\\config\\ssh\\agent.toml", os.Getenv("USER"))
+		cmd := exec.Command("cls")
+		cmd.Stdout = os.Stdout
+		cmd.Run()
 	} else if runtime.GOOS == "linux" {
 		path = fmt.Sprintf("/home/%s/.config/1Password/ssh/agent.toml", os.Getenv("USER"))
+		cmd := exec.Command("clear")
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+
 	}
 
 	p := tea.NewProgram(initialModel())
